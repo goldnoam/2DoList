@@ -1,16 +1,25 @@
-import { differenceInMinutes, format, isPast, parseISO } from 'date-fns';
+
+import { differenceInMinutes, format, isPast, parseISO, formatDistanceToNow } from 'date-fns';
 import { Task } from './types';
 
-export const formatDateDisplay = (isoDate: string, language: string): { text: string; isOverdue: boolean } => {
-  if (!isoDate) return { text: '', isOverdue: false };
+export const formatDateDisplay = (isoDate: string, language: string): { text: string; isOverdue: boolean; timeLeft: string } => {
+  if (!isoDate) return { text: '', isOverdue: false, timeLeft: '' };
   
   const date = parseISO(isoDate);
   const now = new Date();
+  let timeLeft = '';
+
+  try {
+     timeLeft = formatDistanceToNow(date, { addSuffix: true });
+  } catch (e) {
+     // Fallback if date-fns fails or date is invalid
+     timeLeft = '';
+  }
   
   if (isPast(date)) {
-    return { text: format(date, "PPp"), isOverdue: true };
+    return { text: format(date, "PPp"), isOverdue: true, timeLeft };
   } else {
-    return { text: format(date, "PPp"), isOverdue: false };
+    return { text: format(date, "PPp"), isOverdue: false, timeLeft };
   }
 };
 

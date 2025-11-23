@@ -52,6 +52,7 @@ export const TRANSLATIONS: Translations = {
     confirmClearAllTitle: "Delete All Data?",
     confirmClearAllMessage: "This will permanently delete all your tasks. This action cannot be undone.",
     progress: "Progress",
+    timeLeft: "Time Left",
   },
   [Language.HE]: {
     appTitle: "נועם גולד AI משימות",
@@ -103,6 +104,7 @@ export const TRANSLATIONS: Translations = {
     confirmClearAllTitle: "מחיקת כל הנתונים?",
     confirmClearAllMessage: "פעולה זו תמחק את כל המשימות שלך לצמיתות. לא ניתן לבטל פעולה זו.",
     progress: "התקדמות",
+    timeLeft: "זמן נותר",
   },
   [Language.ZH]: {
     appTitle: "Noam Gold AI 待办事项",
@@ -154,6 +156,7 @@ export const TRANSLATIONS: Translations = {
     confirmClearAllTitle: "删除所有数据？",
     confirmClearAllMessage: "这将永久删除您的所有任务。此操作无法撤消。",
     progress: "进度",
+    timeLeft: "剩余时间",
   },
   [Language.RU]: {
     appTitle: "Noam Gold AI Задачи",
@@ -205,6 +208,7 @@ export const TRANSLATIONS: Translations = {
     confirmClearAllTitle: "Удалить все данные?",
     confirmClearAllMessage: "Это навсегда удалит все ваши задачи. Это действие необратимо.",
     progress: "Прогресс",
+    timeLeft: "Осталось",
   },
   [Language.HI]: {
     appTitle: "Noam Gold AI टू-डू",
@@ -256,6 +260,7 @@ export const TRANSLATIONS: Translations = {
     confirmClearAllTitle: "सभी डेटा हटाएं?",
     confirmClearAllMessage: "यह आपके सभी कार्यों को स्थायी रूप से हटा देगा। यह कार्रवाई पूर्ववत नहीं की जा सकती।",
     progress: "प्रगति",
+    timeLeft: "समय शेष",
   },
   [Language.ES]: {
     appTitle: "Noam Gold AI Tareas",
@@ -307,6 +312,7 @@ export const TRANSLATIONS: Translations = {
     confirmClearAllTitle: "¿Eliminar todos los datos?",
     confirmClearAllMessage: "Esto eliminará permanentemente todas tus tareas. Esta acción no se puede deshacer.",
     progress: "Progreso",
+    timeLeft: "Tiempo restante",
   },
   [Language.DE]: {
     appTitle: "Noam Gold AI Aufgaben",
@@ -358,6 +364,7 @@ export const TRANSLATIONS: Translations = {
     confirmClearAllTitle: "Alle Daten löschen?",
     confirmClearAllMessage: "Dies wird alle Ihre Aufgaben dauerhaft löschen. Diese Aktion kann nicht rückgängig gemacht werden.",
     progress: "Fortschritt",
+    timeLeft: "Verbleibende Zeit",
   },
   [Language.FR]: {
     appTitle: "Noam Gold AI Tâches",
@@ -409,6 +416,7 @@ export const TRANSLATIONS: Translations = {
     confirmClearAllTitle: "Supprimer toutes les données ?",
     confirmClearAllMessage: "Cela supprimera définitivement toutes vos tâches. Cette action est irréversible.",
     progress: "Progression",
+    timeLeft: "Temps restant",
   },
 };
 

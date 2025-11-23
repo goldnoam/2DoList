@@ -82,6 +82,7 @@ export type TranslationKey =
   | 'deleteAllTasks'
   | 'confirmClearAllTitle'
   | 'confirmClearAllMessage'
-  | 'progress';
+  | 'progress'
+  | 'timeLeft';
 
 export type Translations = Record<Language, Record<TranslationKey, string>>;

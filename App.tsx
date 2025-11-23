@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
@@ -37,7 +38,8 @@ import {
   Check,
   CheckSquare,
   Square,
-  X as XIcon
+  X,
+  Clock
 } from 'lucide-react';
 import { AppSettings, Language, Task, Theme } from './types';
 import { TRANSLATIONS, FLAG_COLORS } from './constants';
@@ -61,11 +63,43 @@ const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<Re
     try {
       const stickyValue = window.localStorage.getItem(key);
       if (stickyValue !== null) {
-        const parsed = JSON.parse(stickyValue);
+        let parsed = JSON.parse(stickyValue);
+        
         // Safety check: if we expect an array but got something else, return default
         if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
            return defaultValue;
         }
+
+        // Auto-Repair: Fix Tasks Corruption (Missing or Duplicate IDs)
+        if (key === 'noam-todo-tasks' && Array.isArray(parsed)) {
+           const seenIds = new Set();
+           let wasRepaired = false;
+           
+           parsed = parsed.map((t: any) => {
+             // 1. Fix missing ID
+             if (!t.id || t.id === "undefined") {
+                wasRepaired = true;
+                return { ...t, id: generateId() }; 
+             }
+
+             // 2. Fix Duplicate IDs (Critical fix for "Select One Selects All")
+             if (seenIds.has(t.id)) {
+                 wasRepaired = true;
+                 return { ...t, id: generateId() }; // REGENERATE new ID instead of dropping
+             }
+             
+             seenIds.add(t.id);
+             return t;
+           });
+           
+           // If we fixed IDs, save immediately to clean storage
+           if (wasRepaired) {
+              try {
+                window.localStorage.setItem(key, JSON.stringify(parsed));
+              } catch(e) {}
+           }
+        }
+
         return parsed;
       }
       return defaultValue;
@@ -136,7 +170,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
     opacity: isDragging ? 0.8 : 1,
   };
 
-  const { text: dateText, isOverdue } = formatDateDisplay(task.dueDate, language);
+  const { text: dateText, isOverdue, timeLeft } = formatDateDisplay(task.dueDate, language);
   const [shouldAnimate, setShouldAnimate] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const prevCompleted = useRef(task.completed);
@@ -237,7 +271,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
             {task.description}
           </p>
 
-          <div className="flex flex-wrap items-center gap-4 mt-3 text-xs sm:text-sm">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-xs sm:text-sm">
             {dateText && (
                <div className={`flex items-center gap-1 font-medium ${
                  task.completed 
@@ -251,6 +285,13 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
                </div>
             )}
             
+            {timeLeft && !task.completed && (
+                <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/50 px-2 py-0.5 rounded-full">
+                   <Clock size={12} />
+                   <span>{timeLeft}</span>
+                </div>
+            )}
+
             {/* Expansion Indicator */}
             {!selectionMode && (
               <div className="text-gray-400 dark:text-gray-600 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto sm:ml-0">
@@ -399,12 +440,13 @@ export default function App() {
         return currentTasks.map(t => t.id === editingTask.id ? { ...t, ...taskData } : t);
       });
     } else {
+      // Create new task - ensures `id` is set last to override any undefined id passed in taskData
       const newTask: Task = {
+        ...taskData,
         id: generateId(),
         createdAt: Date.now(),
         completed: false,
         order: taskList.length,
-        ...taskData,
       };
       setTasks(prev => [newTask, ...(Array.isArray(prev) ? prev : [])]);
     }
@@ -636,7 +678,7 @@ export default function App() {
 
           <div className="mt-4 flex flex-col sm:flex-row gap-3">
              {/* Search Bar */}
-             <div className="relative flex-1">
+             <div className="relative flex-1 group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
                    <Search size={18} />
                 </div>
@@ -645,8 +687,16 @@ export default function App() {
                   placeholder={t.search}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 border-transparent focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-primary outline-none transition-all text-gray-900 dark:text-white placeholder-gray-500"
+                  className="w-full pl-10 pr-10 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 border-transparent focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-primary outline-none transition-all text-gray-900 dark:text-white placeholder-gray-500"
                 />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
              </div>
 
              {/* Sort Section */}
@@ -710,13 +760,13 @@ export default function App() {
                {isExportMenuOpen && (
                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
                    <button 
-                     onClick={() => { exportTasks(taskList, 'json'); setIsExportMenuOpen(false); }}
+                     onClick={() => { exportTasks(processedTasks, 'json'); setIsExportMenuOpen(false); }}
                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
                    >
                      Export as JSON
                    </button>
                    <button 
-                     onClick={() => { exportTasks(taskList, 'csv'); setIsExportMenuOpen(false); }}
+                     onClick={() => { exportTasks(processedTasks, 'csv'); setIsExportMenuOpen(false); }}
                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
                    >
                      Export as CSV
@@ -746,9 +796,11 @@ export default function App() {
               {processedTasks.length === 0 ? (
                 <div className="text-center py-16 px-4">
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 mb-4">
-                    <CheckCircle size={32} />
+                    {searchQuery ? <Search size={32} /> : <CheckCircle size={32} />}
                   </div>
-                  <p className="text-gray-500 dark:text-gray-400 text-lg">{t.noTasks}</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-lg">
+                    {searchQuery ? 'No matching tasks found.' : t.noTasks}
+                  </p>
                 </div>
               ) : (
                 processedTasks.map(task => (

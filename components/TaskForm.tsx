@@ -38,13 +38,19 @@ export const TaskForm: React.FC<TaskFormProps> = ({ isOpen, onClose, onSave, ini
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
-      id: initialData?.id,
+    const taskData: any = {
       subject,
       description,
       dueDate,
       flagColor,
-    });
+    };
+    
+    // Only attach ID if it exists (edit mode)
+    if (initialData?.id) {
+      taskData.id = initialData.id;
+    }
+
+    onSave(taskData);
     onClose();
   };
 
