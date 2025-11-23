@@ -47,12 +47,28 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { formatDateDisplay, exportTasks, handleShare } from './utils';
 import { isSameDay, parseISO } from 'date-fns';
 
+// --- Utils ---
+const generateId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
+};
+
 // --- Local Storage Hooks ---
 const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] => {
   const [value, setValue] = useState<T>(() => {
     try {
       const stickyValue = window.localStorage.getItem(key);
-      return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+      if (stickyValue !== null) {
+        const parsed = JSON.parse(stickyValue);
+        // Safety check: if we expect an array but got something else, return default
+        if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
+           return defaultValue;
+        }
+        return parsed;
+      }
+      return defaultValue;
     } catch (error) {
       console.warn(`Error parsing localStorage key "${key}":`, error);
       return defaultValue;
@@ -328,8 +344,9 @@ export default function App() {
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Derived State for Counters
-  const completedCount = tasks.filter(t => t.completed).length;
-  const totalCount = tasks.length;
+  const taskList = Array.isArray(tasks) ? tasks : [];
+  const completedCount = taskList.filter(t => t.completed).length;
+  const totalCount = taskList.length;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -377,16 +394,19 @@ export default function App() {
   // Handlers
   const handleAddTask = (taskData: any) => {
     if (editingTask) {
-      setTasks(tasks.map(t => t.id === editingTask.id ? { ...t, ...taskData } : t));
+      setTasks(prev => {
+        const currentTasks = Array.isArray(prev) ? prev : [];
+        return currentTasks.map(t => t.id === editingTask.id ? { ...t, ...taskData } : t);
+      });
     } else {
       const newTask: Task = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         createdAt: Date.now(),
         completed: false,
-        order: tasks.length,
+        order: taskList.length,
         ...taskData,
       };
-      setTasks([newTask, ...tasks]);
+      setTasks(prev => [newTask, ...(Array.isArray(prev) ? prev : [])]);
     }
     setEditingTask(undefined);
   };
@@ -397,21 +417,26 @@ export default function App() {
       title: t.confirmDeleteTitle,
       message: t.confirmDeleteMessage,
       onConfirm: () => {
-        setTasks(tasks.filter(t => t.id !== id));
+        setTasks(prev => {
+          const currentTasks = Array.isArray(prev) ? prev : [];
+          return currentTasks.filter(t => t.id !== id);
+        });
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
       }
     });
   };
 
   const handleToggleComplete = (id: string) => {
-    const updatedTasks = tasks.map(t => {
-      if (t.id === id) {
-        const completed = !t.completed;
-        return { ...t, completed };
-      }
-      return t;
+    setTasks(prev => {
+      const currentTasks = Array.isArray(prev) ? prev : [];
+      return currentTasks.map(t => {
+        if (t.id === id) {
+          const completed = !t.completed;
+          return { ...t, completed };
+        }
+        return t;
+      });
     });
-    setTasks(updatedTasks);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -420,9 +445,10 @@ export default function App() {
     // Only allow drag reordering if manual sort is active
     if (sortBy === 'manual' && over && active.id !== over.id) {
       setTasks((items) => {
-        const oldIndex = items.findIndex((t) => t.id === active.id);
-        const newIndex = items.findIndex((t) => t.id === over.id);
-        return arrayMove(items, oldIndex, newIndex);
+        const safeItems = Array.isArray(items) ? items : [];
+        const oldIndex = safeItems.findIndex((t) => t.id === active.id);
+        const newIndex = safeItems.findIndex((t) => t.id === over.id);
+        return arrayMove(safeItems, oldIndex, newIndex);
       });
     }
   };
@@ -456,7 +482,10 @@ export default function App() {
       title: t.confirmDeleteTitle,
       message: t.confirmDeleteMultipleMessage.replace('{count}', selectedTaskIds.size.toString()),
       onConfirm: () => {
-        setTasks(tasks.filter(t => !selectedTaskIds.has(t.id)));
+        setTasks(prev => {
+          const currentTasks = Array.isArray(prev) ? prev : [];
+          return currentTasks.filter(t => !selectedTaskIds.has(t.id));
+        });
         setSelectedTaskIds(new Set());
         setSelectionMode(false);
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
@@ -465,30 +494,34 @@ export default function App() {
   };
 
   const handleBulkComplete = () => {
-    const updatedTasks = tasks.map(t => {
-      if (selectedTaskIds.has(t.id)) {
-        return { ...t, completed: true };
-      }
-      return t;
+    setTasks(prev => {
+      const currentTasks = Array.isArray(prev) ? prev : [];
+      return currentTasks.map(t => {
+        if (selectedTaskIds.has(t.id)) {
+          return { ...t, completed: true };
+        }
+        return t;
+      });
     });
-    setTasks(updatedTasks);
     setSelectionMode(false);
   };
 
   const handleBulkMarkIncomplete = () => {
-    const updatedTasks = tasks.map(t => {
-      if (selectedTaskIds.has(t.id)) {
-        return { ...t, completed: false };
-      }
-      return t;
+    setTasks(prev => {
+      const currentTasks = Array.isArray(prev) ? prev : [];
+      return currentTasks.map(t => {
+        if (selectedTaskIds.has(t.id)) {
+          return { ...t, completed: false };
+        }
+        return t;
+      });
     });
-    setTasks(updatedTasks);
     setSelectionMode(false);
   };
 
   const handleBulkShare = () => {
     // Share as a list
-    const selectedTasksList = tasks.filter(t => selectedTaskIds.has(t.id));
+    const selectedTasksList = taskList.filter(t => selectedTaskIds.has(t.id));
     const text = selectedTasksList.map(task => {
       const status = task.completed ? "✅" : "⬜";
       return `${status} ${task.subject}`;
@@ -513,7 +546,7 @@ export default function App() {
   // Filter & Sort Logic
   const processedTasks = React.useMemo(() => {
     // 1. Filter by search (Subject, Description, and Flag Color)
-    let result = tasks.filter(task => {
+    let result = taskList.filter(task => {
       const query = searchQuery.toLowerCase();
       // Map flag color hex to name
       const colorIndex = FLAG_COLORS.indexOf(task.flagColor);
@@ -559,7 +592,7 @@ export default function App() {
     }
     
     return result;
-  }, [tasks, searchQuery, sortBy]);
+  }, [taskList, searchQuery, sortBy]);
 
   return (
     <div className={`min-h-screen flex flex-col ${isRTL ? 'font-[sans-serif]' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
@@ -677,13 +710,13 @@ export default function App() {
                {isExportMenuOpen && (
                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
                    <button 
-                     onClick={() => { exportTasks(tasks, 'json'); setIsExportMenuOpen(false); }}
+                     onClick={() => { exportTasks(taskList, 'json'); setIsExportMenuOpen(false); }}
                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
                    >
                      Export as JSON
                    </button>
                    <button 
-                     onClick={() => { exportTasks(tasks, 'csv'); setIsExportMenuOpen(false); }}
+                     onClick={() => { exportTasks(taskList, 'csv'); setIsExportMenuOpen(false); }}
                      className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
                    >
                      Export as CSV
@@ -761,7 +794,7 @@ export default function App() {
                   <CheckCircle size={20} />
                 </button>
                 
-                {tasks.some(t => selectedTaskIds.has(t.id) && t.completed) && (
+                {taskList.some(t => selectedTaskIds.has(t.id) && t.completed) && (
                   <button 
                     onClick={handleBulkMarkIncomplete}
                     className="p-2 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
