@@ -35,6 +35,7 @@ export const TRANSLATIONS: Translations = {
     sortDueDate: "Due Date",
     sortCreated: "Created Date",
     sortPriority: "Priority",
+    sortDueToday: "Due Today",
   },
   [Language.HE]: {
     appTitle: "נועם גולד AI משימות",
@@ -70,6 +71,7 @@ export const TRANSLATIONS: Translations = {
     sortDueDate: "תאריך יעד",
     sortCreated: "תאריך יצירה",
     sortPriority: "עדיפות",
+    sortDueToday: "היום",
   },
   [Language.ZH]: {
     appTitle: "Noam Gold AI 待办事项",
@@ -105,6 +107,7 @@ export const TRANSLATIONS: Translations = {
     sortDueDate: "截止日期",
     sortCreated: "创建日期",
     sortPriority: "优先级",
+    sortDueToday: "今天到期",
   },
   [Language.RU]: {
     appTitle: "Noam Gold AI Задачи",
@@ -140,6 +143,7 @@ export const TRANSLATIONS: Translations = {
     sortDueDate: "Срок",
     sortCreated: "Дата создания",
     sortPriority: "Приоритет",
+    sortDueToday: "Сегодня",
   },
   [Language.HI]: {
     appTitle: "Noam Gold AI टू-डू",
@@ -175,6 +179,7 @@ export const TRANSLATIONS: Translations = {
     sortDueDate: "नियत तिथि",
     sortCreated: "बनाई गई तिथि",
     sortPriority: "प्राथमिकता",
+    sortDueToday: "आज देय",
   },
   [Language.ES]: {
     appTitle: "Noam Gold AI Tareas",
@@ -210,6 +215,7 @@ export const TRANSLATIONS: Translations = {
     sortDueDate: "Fecha de Vencimiento",
     sortCreated: "Fecha de Creación",
     sortPriority: "Prioridad",
+    sortDueToday: "Para hoy",
   },
   [Language.DE]: {
     appTitle: "Noam Gold AI Aufgaben",
@@ -245,6 +251,7 @@ export const TRANSLATIONS: Translations = {
     sortDueDate: "Fälligkeitsdatum",
     sortCreated: "Erstellungsdatum",
     sortPriority: "Priorität",
+    sortDueToday: "Heute fällig",
   },
   [Language.FR]: {
     appTitle: "Noam Gold AI Tâches",
@@ -280,6 +287,7 @@ export const TRANSLATIONS: Translations = {
     sortDueDate: "Date d'échéance",
     sortCreated: "Date de création",
     sortPriority: "Priorité",
+    sortDueToday: "Dû aujourd'hui",
   },
 };
 

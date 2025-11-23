@@ -65,6 +65,7 @@ export type TranslationKey =
   | 'sortManual'
   | 'sortDueDate'
   | 'sortCreated'
-  | 'sortPriority';
+  | 'sortPriority'
+  | 'sortDueToday';
 
 export type Translations = Record<Language, Record<TranslationKey, string>>;

@@ -32,13 +32,16 @@ import {
   GripVertical,
   ArrowUpDown,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  RotateCcw,
+  Check
 } from 'lucide-react';
 import { AppSettings, Language, Task, Theme } from './types';
 import { TRANSLATIONS, FLAG_COLORS } from './constants';
 import { TaskForm } from './components/TaskForm';
 import { SettingsModal } from './components/SettingsModal';
 import { formatDateDisplay, exportTasks, handleShare } from './utils';
+import { isSameDay, parseISO } from 'date-fns';
 
 // --- Local Storage Hooks ---
 const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] => {
@@ -58,7 +61,7 @@ const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<Re
 const COLOR_NAMES = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'gray'];
 
 // --- Sorting Types ---
-type SortOption = 'manual' | 'dueDate' | 'created' | 'priority';
+type SortOption = 'manual' | 'dueDate' | 'created' | 'priority' | 'dueToday';
 
 // --- Sortable Task Item Component ---
 interface SortableTaskItemProps {
@@ -133,7 +136,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
           </div>
         )}
 
-        {/* Checkbox */}
+        {/* Checkbox - Left side */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -142,6 +145,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
           className={`mt-1 transition-all duration-300 transform active:scale-90 ${
             task.completed ? 'text-green-500 scale-110' : 'text-gray-300 dark:text-gray-600 hover:text-primary hover:scale-105'
           }`}
+          title={task.completed ? t.markUndone : t.markDone}
         >
           {task.completed ? <CheckCircle size={24} /> : <Circle size={24} />}
         </button>
@@ -153,11 +157,11 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
         >
           <div className="flex justify-between items-start gap-2">
             <h3 
-              className={`font-semibold text-lg pr-2 transition-all duration-300 ${
+              className={`font-semibold text-lg pr-2 transition-all duration-500 ${
                 task.completed 
-                  ? 'text-gray-500 line-through dark:text-gray-500' 
+                  ? 'text-gray-500 line-through dark:text-gray-500 decoration-green-500 decoration-2' 
                   : 'text-gray-800 dark:text-gray-100'
-              } ${isExpanded ? 'whitespace-pre-wrap' : 'truncate'}`}
+              } ${isExpanded ? 'whitespace-pre-wrap' : 'truncate'} ${shouldAnimate ? 'text-green-600 dark:text-green-400 scale-[1.02] origin-left' : ''}`}
             >
               {task.subject}
             </h3>
@@ -191,23 +195,39 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
           </div>
         </div>
 
-        {/* Actions - Visible on hover/focus or mobile always visible somewhat */}
+        {/* Actions - Visible on hover/focus */}
         <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          {/* Explicit Complete Button */}
+          <button 
+            onClick={(e) => { e.stopPropagation(); onToggleComplete(task.id); }}
+            className={`p-2 rounded-lg transition-colors ${
+              task.completed 
+                ? 'text-green-500 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40' 
+                : 'text-gray-500 bg-gray-100 dark:bg-gray-700 hover:text-green-600 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+            title={task.completed ? t.markUndone : t.markDone}
+          >
+            {task.completed ? <RotateCcw size={16} /> : <Check size={16} />}
+          </button>
+          
           <button 
             onClick={(e) => { e.stopPropagation(); onEdit(task); }} 
             className="p-2 text-gray-500 hover:text-primary bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+            title={t.editTask}
           >
             <Edit2 size={16} />
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} 
             className="p-2 text-gray-500 hover:text-red-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+            title={t.deleteTask}
           >
             <Trash2 size={16} />
           </button>
           <button 
             onClick={(e) => { e.stopPropagation(); onShare(task); }} 
             className="p-2 text-gray-500 hover:text-blue-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+            title={t.share}
           >
             <Share2 size={16} />
           </button>
@@ -234,10 +254,28 @@ export default function App() {
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('manual');
+  
+  // Export Menu State
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Sensors for DnD
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Sensors for DnD with activation constraint to fix button clicking issues
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -330,8 +368,17 @@ export default function App() {
       );
     });
 
-    // 2. Sort
-    if (sortBy !== 'manual') {
+    // 2. Filter by Due Today if selected
+    if (sortBy === 'dueToday') {
+      result = result.filter(task => {
+        if (!task.dueDate) return false;
+        return isSameDay(parseISO(task.dueDate), new Date());
+      });
+      // Sort by specific time today
+      result.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    }
+    // 3. Sort for other methods
+    else if (sortBy !== 'manual') {
       result.sort((a, b) => {
         if (sortBy === 'dueDate') {
           // Earliest due date first. Empty due dates last.
@@ -419,6 +466,7 @@ export default function App() {
                   >
                     <option value="manual">{t.sortManual}</option>
                     <option value="dueDate">{t.sortDueDate}</option>
+                    <option value="dueToday">{t.sortDueToday}</option>
                     <option value="created">{t.sortCreated}</option>
                     <option value="priority">{t.sortPriority}</option>
                   </select>
@@ -436,9 +484,31 @@ export default function App() {
         
         {/* Actions Bar */}
         <div className="flex justify-end gap-2 mb-6 no-print">
-           <button onClick={() => exportTasks(tasks)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-             <Download size={16} /> {t.exportAll}
-           </button>
+           <div className="relative" ref={exportMenuRef}>
+             <button 
+               onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} 
+               className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+             >
+               <Download size={16} /> {t.exportAll} <ChevronDown size={14} />
+             </button>
+             {isExportMenuOpen && (
+               <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
+                 <button 
+                   onClick={() => { exportTasks(tasks, 'json'); setIsExportMenuOpen(false); }}
+                   className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                 >
+                   Export as JSON
+                 </button>
+                 <button 
+                   onClick={() => { exportTasks(tasks, 'csv'); setIsExportMenuOpen(false); }}
+                   className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                 >
+                   Export as CSV
+                 </button>
+               </div>
+             )}
+           </div>
+
            <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
              <Printer size={16} /> {t.printAll}
            </button>
