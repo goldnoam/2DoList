@@ -30,7 +30,9 @@ import {
   Edit2,
   Search,
   GripVertical,
-  ArrowUpDown
+  ArrowUpDown,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { AppSettings, Language, Task, Theme } from './types';
 import { TRANSLATIONS, FLAG_COLORS } from './constants';
@@ -98,6 +100,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
 
   const { text: dateText, isOverdue } = formatDateDisplay(task.dueDate, language);
   const [shouldAnimate, setShouldAnimate] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const prevCompleted = useRef(task.completed);
 
   useEffect(() => {
@@ -119,16 +122,23 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
       } ${shouldAnimate ? 'animate-pop ring-2 ring-green-500 ring-opacity-50' : ''}`}
     >
       <div className="flex items-start gap-3">
-        {/* Drag Handle */}
+        {/* Drag Handle - Visible only on group hover and when sorting is manual */}
         {isSortingEnabled && (
-          <div {...attributes} {...listeners} className="mt-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+          <div 
+            {...attributes} 
+            {...listeners} 
+            className="mt-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          >
             <GripVertical size={20} />
           </div>
         )}
 
         {/* Checkbox */}
         <button
-          onClick={() => onToggleComplete(task.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleComplete(task.id);
+          }}
           className={`mt-1 transition-all duration-300 transform active:scale-90 ${
             task.completed ? 'text-green-500 scale-110' : 'text-gray-300 dark:text-gray-600 hover:text-primary hover:scale-105'
           }`}
@@ -136,15 +146,18 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
           {task.completed ? <CheckCircle size={24} /> : <Circle size={24} />}
         </button>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
+        {/* Content - Click to Expand */}
+        <div 
+          className="flex-1 min-w-0 cursor-pointer" 
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
           <div className="flex justify-between items-start gap-2">
             <h3 
-              className={`font-semibold text-lg truncate pr-2 transition-all duration-300 ${
+              className={`font-semibold text-lg pr-2 transition-all duration-300 ${
                 task.completed 
                   ? 'text-gray-500 line-through dark:text-gray-500' 
                   : 'text-gray-800 dark:text-gray-100'
-              }`}
+              } ${isExpanded ? 'whitespace-pre-wrap' : 'truncate'}`}
             >
               {task.subject}
             </h3>
@@ -153,7 +166,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
             )}
           </div>
           
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+          <p className={`text-sm text-gray-600 dark:text-gray-400 mt-1 ${isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>
             {task.description}
           </p>
 
@@ -170,18 +183,32 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
                  <span>{isOverdue && !task.completed ? `${t.overdue}: ` : ''}{dateText}</span>
                </div>
             )}
+            
+            {/* Expansion Indicator */}
+            <div className="text-gray-400 dark:text-gray-600 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto sm:ml-0">
+               {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </div>
           </div>
         </div>
 
         {/* Actions - Visible on hover/focus or mobile always visible somewhat */}
         <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onEdit(task)} className="p-2 text-gray-500 hover:text-primary bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEdit(task); }} 
+            className="p-2 text-gray-500 hover:text-primary bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+          >
             <Edit2 size={16} />
           </button>
-          <button onClick={() => onDelete(task.id)} className="p-2 text-gray-500 hover:text-red-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} 
+            className="p-2 text-gray-500 hover:text-red-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+          >
             <Trash2 size={16} />
           </button>
-          <button onClick={() => onShare(task)} className="p-2 text-gray-500 hover:text-blue-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onShare(task); }} 
+            className="p-2 text-gray-500 hover:text-blue-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+          >
             <Share2 size={16} />
           </button>
         </div>
@@ -374,23 +401,30 @@ export default function App() {
                 />
              </div>
 
-             {/* Sort Dropdown */}
-             <div className="relative min-w-[160px]">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                   <ArrowUpDown size={16} />
+             {/* Sort Section */}
+             <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className={`text-sm font-medium whitespace-nowrap transition-colors ${
+                  sortBy !== 'manual' ? 'text-primary' : 'text-gray-500 dark:text-gray-400'
+                }`}>
+                  {t.sortBy}
                 </div>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="w-full pl-10 pr-8 py-2 appearance-none rounded-xl bg-gray-100 dark:bg-gray-800 border-transparent focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-primary outline-none transition-all text-gray-900 dark:text-white cursor-pointer"
-                >
-                  <option value="manual">{t.sortManual}</option>
-                  <option value="dueDate">{t.sortDueDate}</option>
-                  <option value="created">{t.sortCreated}</option>
-                  <option value="priority">{t.sortPriority}</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                <div className="relative min-w-[160px] flex-1 sm:flex-none">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                     <ArrowUpDown size={16} />
+                  </div>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as SortOption)}
+                    className="w-full pl-10 pr-8 py-2 appearance-none rounded-xl bg-gray-100 dark:bg-gray-800 border-transparent focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-primary outline-none transition-all text-gray-900 dark:text-white cursor-pointer"
+                  >
+                    <option value="manual">{t.sortManual}</option>
+                    <option value="dueDate">{t.sortDueDate}</option>
+                    <option value="created">{t.sortCreated}</option>
+                    <option value="priority">{t.sortPriority}</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
                 </div>
              </div>
           </div>
