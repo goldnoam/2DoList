@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
@@ -54,7 +55,8 @@ const generateId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return Date.now().toString(36) + Math.random().toString(36).substring(2);
+  // Stronger fallback to prevent collisions in fast loops
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 9) + Math.random().toString(36).substr(2, 9);
 };
 
 // --- Local Storage Hooks ---
@@ -69,37 +71,6 @@ const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<Re
         if (Array.isArray(defaultValue) && !Array.isArray(parsed)) {
            return defaultValue;
         }
-
-        // Auto-Repair: Fix Tasks Corruption (Missing or Duplicate IDs)
-        if (key === 'noam-todo-tasks' && Array.isArray(parsed)) {
-           const seenIds = new Set();
-           let wasRepaired = false;
-           
-           parsed = parsed.map((t: any) => {
-             // 1. Fix missing ID
-             if (!t.id || t.id === "undefined") {
-                wasRepaired = true;
-                return { ...t, id: generateId() }; 
-             }
-
-             // 2. Fix Duplicate IDs (Critical fix for "Select One Selects All")
-             if (seenIds.has(t.id)) {
-                 wasRepaired = true;
-                 return { ...t, id: generateId() }; // REGENERATE new ID instead of dropping
-             }
-             
-             seenIds.add(t.id);
-             return t;
-           });
-           
-           // If we fixed IDs, save immediately to clean storage
-           if (wasRepaired) {
-              try {
-                window.localStorage.setItem(key, JSON.stringify(parsed));
-              } catch(e) {}
-           }
-        }
-
         return parsed;
       }
       return defaultValue;
@@ -215,12 +186,12 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
           </div>
         )}
 
-        {/* Drag Handle - Visible only on group hover and when sorting is manual AND not in selection mode */}
+        {/* Drag Handle */}
         {isSortingEnabled && !selectionMode && (
           <div 
             {...attributes} 
             {...listeners} 
-            className="mt-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+            className="mt-1 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1"
           >
             <GripVertical size={20} />
           </div>
@@ -242,7 +213,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
           </button>
         )}
 
-        {/* Content - Click to Expand (disabled in selection mode) */}
+        {/* Content - Click to Expand */}
         <div 
           className="flex-1 min-w-0" 
           onClick={(e) => {
@@ -286,7 +257,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
             )}
             
             {timeLeft && !task.completed && (
-                <div className="flex items-center gap-1 text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/50 px-2 py-0.5 rounded-full">
+                <div className="flex items-center gap-1 text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full border border-gray-200 dark:border-gray-600">
                    <Clock size={12} />
                    <span>{timeLeft}</span>
                 </div>
@@ -301,10 +272,9 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
           </div>
         </div>
 
-        {/* Actions - Visible on hover/focus (Hidden in Selection Mode) */}
+        {/* Actions */}
         {!selectionMode && (
           <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-            {/* Explicit Complete Button */}
             <button 
               onClick={(e) => { e.stopPropagation(); onToggleComplete(task.id); }}
               className={`p-2 rounded-lg transition-colors ${
@@ -361,6 +331,7 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState('');
+  const [quickAddText, setQuickAddText] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('manual');
   
   // Multi-select State
@@ -389,6 +360,39 @@ export default function App() {
   const completedCount = taskList.filter(t => t.completed).length;
   const totalCount = taskList.length;
 
+  // --- Deduplication Effect ---
+  // This ensures that if we ever load corrupted data with duplicates, it gets fixed immediately.
+  useEffect(() => {
+    if (taskList.length === 0) return;
+    
+    const seenIds = new Set();
+    let hasDuplicates = false;
+    let hasMissingIds = false;
+
+    for (const task of taskList) {
+      if (!task.id || task.id === 'undefined') {
+        hasMissingIds = true;
+      } else if (seenIds.has(task.id)) {
+        hasDuplicates = true;
+      }
+      seenIds.add(task.id);
+    }
+
+    if (hasDuplicates || hasMissingIds) {
+      console.log('Fixing duplicate or missing IDs in task list...');
+      setTasks(prev => {
+        const newSeen = new Set();
+        return prev.map(t => {
+          if (!t.id || t.id === 'undefined' || newSeen.has(t.id)) {
+            return { ...t, id: generateId() };
+          }
+          newSeen.add(t.id);
+          return t;
+        });
+      });
+    }
+  }, [taskList.length]); // Run check when length changes/mounts
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
@@ -406,7 +410,7 @@ export default function App() {
     }
   }, [selectionMode]);
 
-  // Sensors for DnD with activation constraint to fix button clicking issues
+  // Sensors for DnD
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -440,10 +444,10 @@ export default function App() {
         return currentTasks.map(t => t.id === editingTask.id ? { ...t, ...taskData } : t);
       });
     } else {
-      // Create new task - ensures `id` is set last to override any undefined id passed in taskData
+      // Create new task
       const newTask: Task = {
         ...taskData,
-        id: generateId(),
+        id: generateId(), // Ensure unique ID
         createdAt: Date.now(),
         completed: false,
         order: taskList.length,
@@ -451,6 +455,18 @@ export default function App() {
       setTasks(prev => [newTask, ...(Array.isArray(prev) ? prev : [])]);
     }
     setEditingTask(undefined);
+  };
+
+  const handleQuickAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && quickAddText.trim()) {
+      handleAddTask({ 
+        subject: quickAddText.trim(), 
+        description: '', 
+        dueDate: '', 
+        flagColor: FLAG_COLORS[7] 
+      });
+      setQuickAddText('');
+    }
   };
 
   const handleDeleteTask = (id: string) => {
@@ -483,8 +499,6 @@ export default function App() {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    
-    // Only allow drag reordering if manual sort is active
     if (sortBy === 'manual' && over && active.id !== over.id) {
       setTasks((items) => {
         const safeItems = Array.isArray(items) ? items : [];
@@ -505,7 +519,6 @@ export default function App() {
     handleShare("My Task", text);
   };
 
-  // Selection Handlers
   const toggleTaskSelection = (id: string) => {
     const newSelected = new Set(selectedTaskIds);
     if (newSelected.has(id)) {
@@ -518,7 +531,6 @@ export default function App() {
 
   const handleBulkDelete = () => {
     if (selectedTaskIds.size === 0) return;
-    
     setConfirmDialog({
       isOpen: true,
       title: t.confirmDeleteTitle,
@@ -562,18 +574,16 @@ export default function App() {
   };
 
   const handleBulkShare = () => {
-    // Share as a list
     const selectedTasksList = taskList.filter(t => selectedTaskIds.has(t.id));
     const text = selectedTasksList.map(task => {
       const status = task.completed ? "✅" : "⬜";
       return `${status} ${task.subject}`;
     }).join('\n');
-    
     handleShare("My Tasks", text);
   };
   
   const handleClearAllData = () => {
-    setIsSettingsModalOpen(false); // Close settings first
+    setIsSettingsModalOpen(false);
     setConfirmDialog({
       isOpen: true,
       title: t.confirmClearAllTitle,
@@ -587,13 +597,10 @@ export default function App() {
 
   // Filter & Sort Logic
   const processedTasks = React.useMemo(() => {
-    // 1. Filter by search (Subject, Description, and Flag Color)
     let result = taskList.filter(task => {
       const query = searchQuery.toLowerCase();
-      // Map flag color hex to name
       const colorIndex = FLAG_COLORS.indexOf(task.flagColor);
       const colorName = colorIndex !== -1 ? COLOR_NAMES[colorIndex] : '';
-
       return (
         task.subject.toLowerCase().includes(query) ||
         task.description.toLowerCase().includes(query) ||
@@ -601,30 +608,24 @@ export default function App() {
       );
     });
 
-    // 2. Filter by Due Today if selected
     if (sortBy === 'dueToday') {
       result = result.filter(task => {
         if (!task.dueDate) return false;
         return isSameDay(parseISO(task.dueDate), new Date());
       });
-      // Sort by specific time today
       result.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     }
-    // 3. Sort for other methods
     else if (sortBy !== 'manual') {
       result.sort((a, b) => {
         if (sortBy === 'dueDate') {
-          // Earliest due date first. Empty due dates last.
           if (!a.dueDate) return 1;
           if (!b.dueDate) return -1;
           return a.dueDate.localeCompare(b.dueDate);
         }
         if (sortBy === 'created') {
-          // Newest created first
           return b.createdAt - a.createdAt;
         }
         if (sortBy === 'priority') {
-          // Priority based on FLAG_COLORS index. Assuming index 0 (Red) is highest.
           const pA = FLAG_COLORS.indexOf(a.flagColor);
           const pB = FLAG_COLORS.indexOf(b.flagColor);
           return pA - pB;
@@ -632,9 +633,14 @@ export default function App() {
         return 0;
       });
     }
-    
     return result;
   }, [taskList, searchQuery, sortBy]);
+
+  // Calculation for progress ring
+  const progressPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const radius = 16;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (progressPercentage / 100) * circumference;
 
   return (
     <div className={`min-h-screen flex flex-col ${isRTL ? 'font-[sans-serif]' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
@@ -644,26 +650,51 @@ export default function App() {
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white overflow-hidden shadow-lg">
+               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white overflow-hidden shadow-lg shrink-0">
                   {settings.userLogo ? (
                     <img src={settings.userLogo} alt="Logo" className="w-full h-full object-cover" />
                   ) : (
                     <span className="font-bold text-lg">AI</span>
                   )}
                </div>
-               <h1 className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
+               <h1 className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary truncate">
                  {t.appTitle}
                </h1>
             </div>
             
             <div className="flex items-center gap-3 sm:gap-4">
-              {/* Progress Counter */}
-              <div className="flex flex-col items-end mr-1">
-                 <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider hidden sm:block">{t.progress}</span>
-                 <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">
-                    <span className="text-sm font-bold text-primary">{completedCount}</span>
-                    <span className="text-xs text-gray-400">/</span>
-                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{totalCount}</span>
+              {/* Circular Progress Counter */}
+              <div className="flex items-center gap-2 mr-1">
+                 <div className="relative w-10 h-10 flex items-center justify-center">
+                    <svg className="transform -rotate-90 w-full h-full">
+                      <circle
+                        cx="20"
+                        cy="20"
+                        r={radius}
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        fill="transparent"
+                        className="text-gray-200 dark:text-gray-700"
+                      />
+                      <circle
+                        cx="20"
+                        cy="20"
+                        r={radius}
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        fill="transparent"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={offset}
+                        className="text-primary transition-all duration-500 ease-out"
+                      />
+                    </svg>
+                    <span className="absolute text-[10px] font-bold text-gray-600 dark:text-gray-300">
+                      {progressPercentage}%
+                    </span>
+                 </div>
+                 <div className="flex flex-col hidden sm:flex">
+                    <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{t.progress}</span>
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{completedCount}/{totalCount}</span>
                  </div>
               </div>
 
@@ -692,7 +723,8 @@ export default function App() {
                 {searchQuery && (
                   <button 
                     onClick={() => setSearchQuery('')}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 z-10"
+                    title="Clear search"
                   >
                     <X size={16} />
                   </button>
@@ -733,6 +765,24 @@ export default function App() {
       {/* --- Main Content --- */}
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6 pb-24">
         
+        {/* Quick Add Bar */}
+        <div className="mb-6 relative group z-0">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-primary transition-colors">
+            <Plus size={24} />
+          </div>
+          <input
+            type="text"
+            value={quickAddText}
+            onChange={(e) => setQuickAddText(e.target.value)}
+            onKeyDown={handleQuickAdd}
+            placeholder={t.quickAdd}
+            className="w-full pl-12 pr-4 py-3.5 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm focus:shadow-md focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-lg text-gray-900 dark:text-white placeholder-gray-400"
+          />
+          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <span className="text-xs font-medium text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded-md hidden sm:inline-block border border-gray-200 dark:border-gray-600">Enter</span>
+          </div>
+        </div>
+
         {/* Actions Bar */}
         <div className="flex flex-wrap justify-between items-center gap-2 mb-6 no-print">
            <div className="flex gap-2">
@@ -755,7 +805,9 @@ export default function App() {
                  onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} 
                  className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                >
-                 <Download size={16} /> {t.exportAll} <ChevronDown size={14} />
+                 <Download size={16} /> 
+                 {searchQuery ? t.exportFiltered : t.exportAll}
+                 <ChevronDown size={14} />
                </button>
                {isExportMenuOpen && (
                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">

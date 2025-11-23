@@ -1,23 +1,35 @@
 
-import { differenceInMinutes, format, isPast, parseISO, formatDistanceToNow } from 'date-fns';
-import { Task } from './types';
+import { differenceInMinutes, format, isPast, parseISO } from 'date-fns';
+import { Task, Language } from './types';
+import { TRANSLATIONS } from './constants';
 
-export const formatDateDisplay = (isoDate: string, language: string): { text: string; isOverdue: boolean; timeLeft: string } => {
+export const formatDateDisplay = (isoDate: string, language: Language): { text: string; isOverdue: boolean; timeLeft: string } => {
   if (!isoDate) return { text: '', isOverdue: false, timeLeft: '' };
   
   const date = parseISO(isoDate);
   const now = new Date();
+  const t = TRANSLATIONS[language];
+  
   let timeLeft = '';
+  
+  // Calculate Time Left if not passed
+  if (!isPast(date)) {
+    const diffInMinutes = differenceInMinutes(date, now);
+    const days = Math.floor(diffInMinutes / (60 * 24));
+    const hours = Math.floor((diffInMinutes % (60 * 24)) / 60);
+    const minutes = diffInMinutes % 60;
 
-  try {
-     timeLeft = formatDistanceToNow(date, { addSuffix: true });
-  } catch (e) {
-     // Fallback if date-fns fails or date is invalid
-     timeLeft = '';
+    if (days > 0) {
+      timeLeft = t.daysLeft.replace('{n}', days.toString());
+    } else if (hours > 0) {
+      timeLeft = t.hoursLeft.replace('{n}', hours.toString());
+    } else if (minutes >= 0) {
+      timeLeft = t.minutesLeft.replace('{n}', minutes.toString());
+    }
   }
   
   if (isPast(date)) {
-    return { text: format(date, "PPp"), isOverdue: true, timeLeft };
+    return { text: format(date, "PPp"), isOverdue: true, timeLeft: '' };
   } else {
     return { text: format(date, "PPp"), isOverdue: false, timeLeft };
   }

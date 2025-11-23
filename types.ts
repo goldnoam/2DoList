@@ -1,4 +1,5 @@
 
+
 export enum Language {
   EN = 'en',
   HE = 'he',
@@ -51,6 +52,7 @@ export type TranslationKey =
   | 'theme'
   | 'about'
   | 'exportAll'
+  | 'exportFiltered'
   | 'printAll'
   | 'search'
   | 'copyright'
@@ -83,6 +85,10 @@ export type TranslationKey =
   | 'confirmClearAllTitle'
   | 'confirmClearAllMessage'
   | 'progress'
-  | 'timeLeft';
+  | 'timeLeft'
+  | 'daysLeft'
+  | 'hoursLeft'
+  | 'minutesLeft'
+  | 'quickAdd';
 
 export type Translations = Record<Language, Record<TranslationKey, string>>;
