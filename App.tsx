@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
@@ -34,12 +35,16 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
-  Check
+  Check,
+  CheckSquare,
+  Square,
+  X as XIcon
 } from 'lucide-react';
 import { AppSettings, Language, Task, Theme } from './types';
 import { TRANSLATIONS, FLAG_COLORS } from './constants';
 import { TaskForm } from './components/TaskForm';
 import { SettingsModal } from './components/SettingsModal';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { formatDateDisplay, exportTasks, handleShare } from './utils';
 import { isSameDay, parseISO } from 'date-fns';
 
@@ -73,6 +78,9 @@ interface SortableTaskItemProps {
   onShare: (task: Task) => void;
   t: any;
   isSortingEnabled: boolean;
+  selectionMode: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
 }
 
 const SortableTaskItem: React.FC<SortableTaskItemProps> = ({ 
@@ -83,7 +91,10 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
   onToggleComplete, 
   onShare, 
   t,
-  isSortingEnabled 
+  isSortingEnabled,
+  selectionMode,
+  isSelected,
+  onToggleSelect
 }) => {
   const {
     attributes,
@@ -92,7 +103,7 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id, disabled: !isSortingEnabled });
+  } = useSortable({ id: task.id, disabled: !isSortingEnabled || selectionMode });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -116,17 +127,38 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
     prevCompleted.current = task.completed;
   }, [task.completed]);
 
+  const handleSelectionClick = (e: React.MouseEvent) => {
+    if (selectionMode) {
+      e.stopPropagation();
+      onToggleSelect(task.id);
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md border border-gray-100 dark:border-gray-700 p-4 mb-3 transition-all ${
-        task.completed ? 'opacity-60 bg-gray-50 dark:bg-gray-900' : ''
-      } ${shouldAnimate ? 'animate-pop ring-2 ring-green-500 ring-opacity-50' : ''}`}
+      onClick={handleSelectionClick}
+      className={`group relative bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md border p-4 mb-3 transition-all ${
+        isSelected ? 'border-primary bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-100 dark:border-gray-700'
+      } ${
+        task.completed && !isSelected ? 'opacity-60 bg-gray-50 dark:bg-gray-900' : ''
+      } ${shouldAnimate ? 'animate-pop ring-2 ring-green-500 ring-opacity-50' : ''} ${selectionMode ? 'cursor-pointer' : ''}`}
     >
       <div className="flex items-start gap-3">
-        {/* Drag Handle - Visible only on group hover and when sorting is manual */}
-        {isSortingEnabled && (
+        {/* Selection Checkbox (Visible in Selection Mode) */}
+        {selectionMode && (
+          <div className="mt-1.5 transition-all animate-in fade-in slide-in-from-left-2 duration-200">
+             {isSelected ? (
+                <div className="text-primary"><CheckSquare size={24} /></div>
+             ) : (
+                <div className="text-gray-300 dark:text-gray-600"><Square size={24} /></div>
+             )}
+          </div>
+        )}
+
+        {/* Drag Handle - Visible only on group hover and when sorting is manual AND not in selection mode */}
+        {isSortingEnabled && !selectionMode && (
           <div 
             {...attributes} 
             {...listeners} 
@@ -136,24 +168,31 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
           </div>
         )}
 
-        {/* Checkbox - Left side */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleComplete(task.id);
-          }}
-          className={`mt-1 transition-all duration-300 transform active:scale-90 ${
-            task.completed ? 'text-green-500 scale-110' : 'text-gray-300 dark:text-gray-600 hover:text-primary hover:scale-105'
-          }`}
-          title={task.completed ? t.markUndone : t.markDone}
-        >
-          {task.completed ? <CheckCircle size={24} /> : <Circle size={24} />}
-        </button>
+        {/* Checkbox - Left side (Hidden if selecting) */}
+        {!selectionMode && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleComplete(task.id);
+            }}
+            className={`mt-1 transition-all duration-300 transform active:scale-90 ${
+              task.completed ? 'text-green-500 scale-110' : 'text-gray-300 dark:text-gray-600 hover:text-primary hover:scale-105'
+            }`}
+            title={task.completed ? t.markUndone : t.markDone}
+          >
+            {task.completed ? <CheckCircle size={24} /> : <Circle size={24} />}
+          </button>
+        )}
 
-        {/* Content - Click to Expand */}
+        {/* Content - Click to Expand (disabled in selection mode) */}
         <div 
-          className="flex-1 min-w-0 cursor-pointer" 
-          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex-1 min-w-0" 
+          onClick={(e) => {
+            if (!selectionMode) {
+               e.stopPropagation();
+               setIsExpanded(!isExpanded);
+            }
+          }}
         >
           <div className="flex justify-between items-start gap-2">
             <h3 
@@ -189,49 +228,53 @@ const SortableTaskItem: React.FC<SortableTaskItemProps> = ({
             )}
             
             {/* Expansion Indicator */}
-            <div className="text-gray-400 dark:text-gray-600 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto sm:ml-0">
-               {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </div>
+            {!selectionMode && (
+              <div className="text-gray-400 dark:text-gray-600 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-auto sm:ml-0">
+                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Actions - Visible on hover/focus */}
-        <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-          {/* Explicit Complete Button */}
-          <button 
-            onClick={(e) => { e.stopPropagation(); onToggleComplete(task.id); }}
-            className={`p-2 rounded-lg transition-colors ${
-              task.completed 
-                ? 'text-green-500 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40' 
-                : 'text-gray-500 bg-gray-100 dark:bg-gray-700 hover:text-green-600 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
-            title={task.completed ? t.markUndone : t.markDone}
-          >
-            {task.completed ? <RotateCcw size={16} /> : <Check size={16} />}
-          </button>
-          
-          <button 
-            onClick={(e) => { e.stopPropagation(); onEdit(task); }} 
-            className="p-2 text-gray-500 hover:text-primary bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-            title={t.editTask}
-          >
-            <Edit2 size={16} />
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} 
-            className="p-2 text-gray-500 hover:text-red-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-            title={t.deleteTask}
-          >
-            <Trash2 size={16} />
-          </button>
-          <button 
-            onClick={(e) => { e.stopPropagation(); onShare(task); }} 
-            className="p-2 text-gray-500 hover:text-blue-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-            title={t.share}
-          >
-            <Share2 size={16} />
-          </button>
-        </div>
+        {/* Actions - Visible on hover/focus (Hidden in Selection Mode) */}
+        {!selectionMode && (
+          <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+            {/* Explicit Complete Button */}
+            <button 
+              onClick={(e) => { e.stopPropagation(); onToggleComplete(task.id); }}
+              className={`p-2 rounded-lg transition-colors ${
+                task.completed 
+                  ? 'text-green-500 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/40' 
+                  : 'text-gray-500 bg-gray-100 dark:bg-gray-700 hover:text-green-600 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+              title={task.completed ? t.markUndone : t.markDone}
+            >
+              {task.completed ? <RotateCcw size={16} /> : <Check size={16} />}
+            </button>
+            
+            <button 
+              onClick={(e) => { e.stopPropagation(); onEdit(task); }} 
+              className="p-2 text-gray-500 hover:text-primary bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+              title={t.editTask}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onDelete(task.id); }} 
+              className="p-2 text-gray-500 hover:text-red-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+              title={t.deleteTask}
+            >
+              <Trash2 size={16} />
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onShare(task); }} 
+              className="p-2 text-gray-500 hover:text-blue-500 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
+              title={t.share}
+            >
+              <Share2 size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -255,6 +298,23 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('manual');
   
+  // Multi-select State
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+
+  // Confirm Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+  
   // Export Menu State
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
@@ -268,6 +328,13 @@ export default function App() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Reset selection when mode changes
+  useEffect(() => {
+    if (!selectionMode) {
+      setSelectedTaskIds(new Set());
+    }
+  }, [selectionMode]);
 
   // Sensors for DnD with activation constraint to fix button clicking issues
   const sensors = useSensors(
@@ -291,6 +358,10 @@ export default function App() {
     }
   }, [settings.theme]);
 
+  // Translations
+  const t = TRANSLATIONS[settings.language];
+  const isRTL = settings.language === Language.HE;
+
   // Handlers
   const handleAddTask = (taskData: any) => {
     if (editingTask) {
@@ -309,9 +380,15 @@ export default function App() {
   };
 
   const handleDeleteTask = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
-      setTasks(tasks.filter(t => t.id !== id));
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: t.confirmDeleteTitle,
+      message: t.confirmDeleteMessage,
+      onConfirm: () => {
+        setTasks(tasks.filter(t => t.id !== id));
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      }
+    });
   };
 
   const handleToggleComplete = (id: string) => {
@@ -348,9 +425,65 @@ export default function App() {
     handleShare("My Task", text);
   };
 
-  // Translations
-  const t = TRANSLATIONS[settings.language];
-  const isRTL = settings.language === Language.HE;
+  // Selection Handlers
+  const toggleTaskSelection = (id: string) => {
+    const newSelected = new Set(selectedTaskIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedTaskIds(newSelected);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedTaskIds.size === 0) return;
+    
+    setConfirmDialog({
+      isOpen: true,
+      title: t.confirmDeleteTitle,
+      message: t.confirmDeleteMultipleMessage.replace('{count}', selectedTaskIds.size.toString()),
+      onConfirm: () => {
+        setTasks(tasks.filter(t => !selectedTaskIds.has(t.id)));
+        setSelectedTaskIds(new Set());
+        setSelectionMode(false);
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
+  const handleBulkComplete = () => {
+    const updatedTasks = tasks.map(t => {
+      if (selectedTaskIds.has(t.id)) {
+        return { ...t, completed: true };
+      }
+      return t;
+    });
+    setTasks(updatedTasks);
+    setSelectionMode(false);
+  };
+
+  const handleBulkMarkIncomplete = () => {
+    const updatedTasks = tasks.map(t => {
+      if (selectedTaskIds.has(t.id)) {
+        return { ...t, completed: false };
+      }
+      return t;
+    });
+    setTasks(updatedTasks);
+    setSelectionMode(false);
+  };
+
+  const handleBulkShare = () => {
+    // Share as a list
+    const selectedTasksList = tasks.filter(t => selectedTaskIds.has(t.id));
+    const text = selectedTasksList.map(task => {
+      const status = task.completed ? "✅" : "⬜";
+      return `${status} ${task.subject}`;
+    }).join('\n');
+    
+    handleShare("My Tasks", text);
+  };
 
   // Filter & Sort Logic
   const processedTasks = React.useMemo(() => {
@@ -480,38 +613,54 @@ export default function App() {
       </header>
 
       {/* --- Main Content --- */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6 pb-24">
         
         {/* Actions Bar */}
-        <div className="flex justify-end gap-2 mb-6 no-print">
-           <div className="relative" ref={exportMenuRef}>
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-6 no-print">
+           <div className="flex gap-2">
              <button 
-               onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} 
-               className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                onClick={() => setSelectionMode(!selectionMode)}
+                className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium border rounded-lg transition-colors ${
+                  selectionMode 
+                    ? 'bg-primary text-white border-primary' 
+                    : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
              >
-               <Download size={16} /> {t.exportAll} <ChevronDown size={14} />
+               {selectionMode ? <CheckSquare size={16} /> : <CheckSquare size={16} />}
+               {selectionMode ? t.cancelSelection : t.select}
              </button>
-             {isExportMenuOpen && (
-               <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
-                 <button 
-                   onClick={() => { exportTasks(tasks, 'json'); setIsExportMenuOpen(false); }}
-                   className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                 >
-                   Export as JSON
-                 </button>
-                 <button 
-                   onClick={() => { exportTasks(tasks, 'csv'); setIsExportMenuOpen(false); }}
-                   className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
-                 >
-                   Export as CSV
-                 </button>
-               </div>
-             )}
            </div>
 
-           <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-             <Printer size={16} /> {t.printAll}
-           </button>
+           <div className="flex gap-2">
+             <div className="relative" ref={exportMenuRef}>
+               <button 
+                 onClick={() => setIsExportMenuOpen(!isExportMenuOpen)} 
+                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+               >
+                 <Download size={16} /> {t.exportAll} <ChevronDown size={14} />
+               </button>
+               {isExportMenuOpen && (
+                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
+                   <button 
+                     onClick={() => { exportTasks(tasks, 'json'); setIsExportMenuOpen(false); }}
+                     className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                   >
+                     Export as JSON
+                   </button>
+                   <button 
+                     onClick={() => { exportTasks(tasks, 'csv'); setIsExportMenuOpen(false); }}
+                     className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                   >
+                     Export as CSV
+                   </button>
+                 </div>
+               )}
+             </div>
+
+             <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+               <Printer size={16} /> {t.printAll}
+             </button>
+           </div>
         </div>
 
         {/* Task List */}
@@ -545,6 +694,9 @@ export default function App() {
                     onShare={handleShareTask}
                     t={t}
                     isSortingEnabled={sortBy === 'manual'}
+                    selectionMode={selectionMode}
+                    isSelected={selectedTaskIds.has(task.id)}
+                    onToggleSelect={toggleTaskSelection}
                   />
                 ))
               )}
@@ -553,13 +705,66 @@ export default function App() {
         </DndContext>
       </main>
 
+      {/* --- Bulk Action Bar --- */}
+      {selectionMode && selectedTaskIds.size > 0 && (
+        <div className="fixed bottom-6 inset-x-0 mx-auto max-w-lg px-4 z-50 animate-in slide-in-from-bottom-6 duration-300 no-print">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-2xl rounded-2xl p-3 flex items-center justify-between">
+             <div className="flex items-center gap-3 px-2">
+                <span className="bg-primary text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                  {selectedTaskIds.size}
+                </span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 hidden sm:inline">
+                  {t.selected}
+                </span>
+             </div>
+             <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleBulkComplete}
+                  className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                  title={t.completeSelected}
+                >
+                  <CheckCircle size={20} />
+                </button>
+                
+                {tasks.some(t => selectedTaskIds.has(t.id) && t.completed) && (
+                  <button 
+                    onClick={handleBulkMarkIncomplete}
+                    className="p-2 text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+                    title={t.markUndone}
+                  >
+                    <RotateCcw size={20} />
+                  </button>
+                )}
+
+                <button 
+                  onClick={handleBulkShare}
+                  className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                  title={t.shareSelected}
+                >
+                  <Share2 size={20} />
+                </button>
+                <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
+                <button 
+                  onClick={handleBulkDelete}
+                  className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                  title={t.deleteSelected}
+                >
+                  <Trash2 size={20} />
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
+
       {/* --- FAB (Floating Action Button) --- */}
-      <button
-        onClick={() => { setEditingTask(undefined); setIsTaskModalOpen(true); }}
-        className="fixed bottom-6 right-6 md:bottom-10 md:right-10 w-14 h-14 bg-primary hover:bg-indigo-600 text-white rounded-full shadow-lg hover:shadow-primary/50 flex items-center justify-center transition-all hover:scale-105 active:scale-95 no-print z-30"
-      >
-        <Plus size={28} />
-      </button>
+      {!selectionMode && (
+        <button
+          onClick={() => { setEditingTask(undefined); setIsTaskModalOpen(true); }}
+          className="fixed bottom-6 right-6 md:bottom-10 md:right-10 w-14 h-14 bg-primary hover:bg-indigo-600 text-white rounded-full shadow-lg hover:shadow-primary/50 flex items-center justify-center transition-all hover:scale-105 active:scale-95 no-print z-30"
+        >
+          <Plus size={28} />
+        </button>
+      )}
 
       {/* --- Footer --- */}
       <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-6 mt-auto no-print">
@@ -592,6 +797,16 @@ export default function App() {
         settings={settings}
         onUpdateSettings={setSettings}
         translations={TRANSLATIONS}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        translations={TRANSLATIONS}
+        language={settings.language}
       />
     </div>
   );

@@ -1,3 +1,4 @@
+
 export enum Language {
   EN = 'en',
   HE = 'he',
@@ -66,6 +67,16 @@ export type TranslationKey =
   | 'sortDueDate'
   | 'sortCreated'
   | 'sortPriority'
-  | 'sortDueToday';
+  | 'sortDueToday'
+  | 'confirmDeleteTitle'
+  | 'confirmDeleteMessage'
+  | 'confirmDeleteMultipleMessage'
+  | 'confirm'
+  | 'select'
+  | 'cancelSelection'
+  | 'selected'
+  | 'deleteSelected'
+  | 'completeSelected'
+  | 'shareSelected';
 
 export type Translations = Record<Language, Record<TranslationKey, string>>;
