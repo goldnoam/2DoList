@@ -77,6 +77,11 @@ export type TranslationKey =
   | 'selected'
   | 'deleteSelected'
   | 'completeSelected'
-  | 'shareSelected';
+  | 'shareSelected'
+  | 'dangerZone'
+  | 'deleteAllTasks'
+  | 'confirmClearAllTitle'
+  | 'confirmClearAllMessage'
+  | 'progress';
 
 export type Translations = Record<Language, Record<TranslationKey, string>>;

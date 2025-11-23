@@ -1,16 +1,18 @@
+
 import React, { useRef } from 'react';
 import { AppSettings, Language, Theme, Translations } from '../types';
-import { X, Upload, Monitor, Moon, Sun } from 'lucide-react';
+import { X, Upload, Moon, Sun, AlertTriangle, Trash2 } from 'lucide-react';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   settings: AppSettings;
   onUpdateSettings: (newSettings: AppSettings) => void;
+  onClearAllData: () => void;
   translations: Translations;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onUpdateSettings, translations }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, settings, onUpdateSettings, onClearAllData, translations }) => {
   const t = translations[settings.language];
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -115,6 +117,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, s
                 onChange={handleLogoUpload}
               />
             </div>
+          </section>
+
+          {/* Danger Zone */}
+          <section className="border-t border-red-200 dark:border-red-900/50 pt-6 mt-6">
+            <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-3 flex items-center gap-2">
+              <AlertTriangle size={20} />
+              {t.dangerZone}
+            </h3>
+            <button
+              onClick={onClearAllData}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors font-medium"
+            >
+              <Trash2 size={18} />
+              {t.deleteAllTasks}
+            </button>
           </section>
 
           {/* About */}

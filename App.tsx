@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
@@ -51,12 +50,21 @@ import { isSameDay, parseISO } from 'date-fns';
 // --- Local Storage Hooks ---
 const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] => {
   const [value, setValue] = useState<T>(() => {
-    const stickyValue = window.localStorage.getItem(key);
-    return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+    try {
+      const stickyValue = window.localStorage.getItem(key);
+      return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+    } catch (error) {
+      console.warn(`Error parsing localStorage key "${key}":`, error);
+      return defaultValue;
+    }
   });
 
   useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(value));
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.error(`Error saving to localStorage key "${key}":`, error);
+    }
   }, [key, value]);
 
   return [value, setValue];
@@ -319,6 +327,10 @@ export default function App() {
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
+  // Derived State for Counters
+  const completedCount = tasks.filter(t => t.completed).length;
+  const totalCount = tasks.length;
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
@@ -484,6 +496,19 @@ export default function App() {
     
     handleShare("My Tasks", text);
   };
+  
+  const handleClearAllData = () => {
+    setIsSettingsModalOpen(false); // Close settings first
+    setConfirmDialog({
+      isOpen: true,
+      title: t.confirmClearAllTitle,
+      message: t.confirmClearAllMessage,
+      onConfirm: () => {
+        setTasks([]);
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
 
   // Filter & Sort Logic
   const processedTasks = React.useMemo(() => {
@@ -556,7 +581,17 @@ export default function App() {
                </h1>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 sm:gap-4">
+              {/* Progress Counter */}
+              <div className="flex flex-col items-end mr-1">
+                 <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider hidden sm:block">{t.progress}</span>
+                 <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">
+                    <span className="text-sm font-bold text-primary">{completedCount}</span>
+                    <span className="text-xs text-gray-400">/</span>
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{totalCount}</span>
+                 </div>
+              </div>
+
               <button 
                 onClick={() => setIsSettingsModalOpen(true)}
                 className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
@@ -796,6 +831,7 @@ export default function App() {
         onClose={() => setIsSettingsModalOpen(false)}
         settings={settings}
         onUpdateSettings={setSettings}
+        onClearAllData={handleClearAllData}
         translations={TRANSLATIONS}
       />
 
